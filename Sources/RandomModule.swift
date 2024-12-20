@@ -21,12 +21,11 @@ struct RandomModule : Module {
 struct CoinTossCommand : Command {
         let message: String = "cointoss"
         let aliases: [String] = ["tosscoin", "coin", "toss"]
-        let arguments: [Argument] = []
+        let arguments: [Parameter] = []
         
-        var command: (ArgsDictionary, Gateway.MessageCreate, any DiscordClient) async -> Void {
+        var command: (ArgsDictionary, Gateway.MessageCreate, any DiscordClient) async -> Result<String, Error> {
                 return { message, payload, client in
-                        let outcome = ["🪙 Heads", "🪙 Tails"].randomElement()!
-                        _ = try? await client.createMessage(channelId: payload.channel_id, payload: .init(content: outcome))
+                        return .success(["🪙 Heads", "🪙 Tails"].randomElement()!)
                 }
         }
 }
@@ -35,12 +34,12 @@ struct CoinTossCommand : Command {
 struct DiceThrowCommand : Command {
         let message: String = "dice"
         let aliases: [String] = ["roll"]
-        let arguments: [Argument] = [
-                .init(argument: "size", argType: .integer, optional: true, defaultValue: .integer(integer: 6), note: "The max number to roll (i.e. 6, 10, 12, 20)"),
-                .init(argument: "count", argType: .integer, optional: true, defaultValue: .integer(integer: 1), note: "The number of dice to roll (up to 5)")
+        let arguments: [Parameter] = [
+                .init(parameter: "size", argType: .integer(3,256), optional: true, defaultValue: .integer(integer: 6), note: "The max number to roll (i.e. 6, 10, 12, 20)"),
+                .init(parameter: "count", argType: .integer(1, 5), optional: true, defaultValue: .integer(integer: 1), note: "The number of dice to roll (up to 5)")
         ]
         
-        var command: (ArgsDictionary, Gateway.MessageCreate, any DiscordClient) async -> Void {
+        var command: (ArgsDictionary, Gateway.MessageCreate, any DiscordClient) async -> Result<String, Error> {
                 return { pairs, payload, client in
                         let size = switch pairs["size"]!.1 {
                         case .integer(let number): number
@@ -56,8 +55,7 @@ struct DiceThrowCommand : Command {
                                 return result + ["\(Int.random(in: 1...size!))"]
                         }
                 
-                        let outcome = "🎲 \(output.joined(separator: ", "))"
-                        _ = try? await client.createMessage(channelId: payload.channel_id, payload: .init(content: outcome))
+                        return .success("🎲 \(output.joined(separator: " • "))")
                 }
         }
 }

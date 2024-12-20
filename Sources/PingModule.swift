@@ -21,17 +21,16 @@ struct PingModule : Module {
 struct PingCommand : Command {
         let message: String = "ping"
         let aliases: [String] = []
-        let arguments: [Argument] = [
-                .init(argument: "count", argType: .integer, optional: true, defaultValue: .integer(integer: 1), note: "1 to 10")
+        let arguments: [Parameter] = [
+                .init(parameter: "count", argType: .integer(1,10), optional: true, defaultValue: .integer(integer: 1), note: "1 to 10")
         ]
         
-        var command: (ArgsDictionary, Gateway.MessageCreate, any DiscordClient) async -> Void {
+        var command: (ArgsDictionary, Gateway.MessageCreate, any DiscordClient) async -> Result<String, Error> {
                 return { pairs, payload, client in
                         let count = if case .integer(let number) = pairs["count"]?.1, 1 <= number, number <= 10 { number } else { 1 }
                         let output = String(String(repeating: "pong!", count: count))
                         
-                        // Print the message.
-                        _ = try? await client.createMessage(channelId: payload.channel_id, payload: .init(content: output))
+                        return .success(output)
                 }
         }
 }

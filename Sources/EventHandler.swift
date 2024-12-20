@@ -6,17 +6,12 @@
 //
 
 import DiscordBM
+import Foundation
 import RegexBuilder
 
 extension Array where Element == Module {
         func firstResponder(for message: String) -> (any Module)? {
                 return self.first { $0.commands.contains { $0.message == message } }
-        }
-}
-
-extension Array where Element == Command {
-        func firstResponse(for message: String) -> (any Command)? {
-                return self.first { $0.allMessages.contains(message) }
         }
 }
 
@@ -33,14 +28,25 @@ struct EventHandler: GatewayEventHandler {
                 // Ignore the bot's own messages.
                 guard let ownId = try? await client.getOwnUser().decode().id, payload.author?.id != ownId else { return }
                 
+                let text = payload.content.lowercased()
+                let components = text.components(separatedBy: " ")
+                
                 // Determine the message being sent to the bot.
-                guard let message = payload.content.split(separator: " ").first?.lowercased().replacingOccurrences(of: "[", with: "").replacingOccurrences(of: "]", with: "")
+                guard let firstWord = components.first, firstWord.first == "!"
                 else { return }
-                        
+                
                 // Check for any responding modules.
+                let message = String(firstWord.dropFirst())
                 guard let firstResponder = modules.firstResponder(for: message),
                       let command = firstResponder.commands.firstResponse(for: message)
                 else { return }
+                
+                // Show the command's help page.
+                if components.count > 1, components[1] == "help" {
+                        // Print error message if one is found.
+                        _ = try? await client.createMessage(channelId: payload.channel_id, payload: .init(embeds: EmbedFactory.helpEmbed(for: command)))
+                        return
+                }
                 
                 // Parse the command to ensure it was correctly provided by the user.
                 guard let args = Parser.parse(from: payload.content, withArguments: command.arguments)
@@ -48,13 +54,25 @@ struct EventHandler: GatewayEventHandler {
                 print("Pairs: \(args)")
                 
                 // Make sure there were no errors detected.
-                guard args.firstError == nil else {
+                // This should be handled separately to avoid bothering calling the command.
+                guard args.errors.isEmpty else {
                         // Print error message if one is found.
-                        _ = try? await client.createMessage(channelId: payload.channel_id, payload: .init(content: "Error: \(args.firstError!)"))
+                        _ = try? await client.createMessage(channelId: payload.channel_id, payload: .init(embeds: EmbedFactory.errorEmbed(for: args.errors)))
                         return
                 }
                 
                 // If the command was found, run it.
-                await command.command(args, payload, client)
+                let outcome = await command.command(args, payload, client)
+                
+                // If the output is text, send it back.
+                switch outcome {
+                case .success(let text):
+                        _ = try? await client.createMessage(channelId: payload.channel_id, payload: .init(embeds: EmbedFactory.normalEmbed(for: text, command: command, payload: payload)))
+                case .failure(let error):
+                        _ = try? await client.createMessage(
+                                channelId: payload.channel_id,
+                                payload: .init(embeds: EmbedFactory.errorEmbed(for: [error]))
+                        )
+                }
         }
 }
